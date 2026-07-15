@@ -1,0 +1,72 @@
+# MediConsult AI — remote deployment stack.
+# Runs the remote MCP server + caretaker upload + Ollama on one host
+# (laptop or the free Oracle Cloud ARM VM, 24GB RAM).
+#
+#   docker compose -f deploy/docker-compose.remote.yml up -d
+#
+# Cloudflared runs separately (see cloudflared_config.yml) and tunnels to
+# these local ports — nothing is exposed publicly except through Cloudflare.
+
+services:
+  # Local LLM — the fallback floor that never runs out of quota
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "127.0.0.1:11434:11434"      # bound to localhost only
+    volumes:
+      - ollama_models:/root/.ollama
+    restart: unless-stopped
+
+  # Remote MCP server (Claude mobile connects here, via Cloudflare Tunnel)
+  mcp:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    command: python -m mediconsult.mcp_server.remote_server
+    ports:
+      - "127.0.0.1:8765:8765"        # localhost only; tunnel fronts it
+    environment:
+      MEDICONSULT_DATA: /data
+      MEDICONSULT_AUTH_SECRET: ${MEDICONSULT_AUTH_SECRET}
+      OLLAMA_HOST: http://ollama:11434
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY}
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+    volumes:
+      - patient_data:/data
+    depends_on:
+      - ollama
+    restart: unless-stopped
+
+  # Caretaker mobile upload page
+  upload:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    command: uvicorn mediconsult.ingest.upload_app:app --host 0.0.0.0 --port 8766
+    ports:
+      - "127.0.0.1:8766:8766"        # localhost only; tunnel fronts it
+    environment:
+      MEDICONSULT_DATA: /data
+      MEDICONSULT_AUTH_SECRET: ${MEDICONSULT_AUTH_SECRET}
+    volumes:
+      - patient_data:/data
+    restart: unless-stopped
+
+  # Continuous backup of the SQLite record to Cloudflare R2 (free)
+  litestream:
+    image: litestream/litestream:latest
+    command: replicate
+    volumes:
+      - patient_data:/data
+      - ./litestream.yml:/etc/litestream.yml:ro
+    environment:
+      R2_ACCESS_KEY: ${R2_ACCESS_KEY}
+      R2_SECRET_KEY: ${R2_SECRET_KEY}
+    depends_on:
+      - mcp
+    restart: unless-stopped
+
+volumes:
+  ollama_models:
+  patient_data:

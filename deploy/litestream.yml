@@ -1,0 +1,16 @@
+# Litestream — continuous backup of the single patient record.
+# The SQLite file is irreplaceable; this streams every change to Cloudflare R2
+# (free tier, no egress fees) so the data-loss window is seconds, not hours.
+
+dbs:
+  - path: /data/patient.db
+    replicas:
+      - type: s3
+        endpoint: https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com
+        bucket: mediconsult-backup
+        path: patient.db
+        access-key-id: ${R2_ACCESS_KEY}
+        secret-access-key: ${R2_SECRET_KEY}
+        # Re-snapshot daily, keep 30 days of point-in-time recovery
+        snapshot-interval: 24h
+        retention: 720h
