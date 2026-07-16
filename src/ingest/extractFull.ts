@@ -48,9 +48,12 @@ export async function extractAll(text: string): Promise<LlmExtraction> {
   if (!text || !text.trim()) return empty();
   const snippet = text.slice(0, 6000); // keep within model context
 
+  // Local 7B models on CPU need well over 60s to emit structured JSON; allow an
+  // override via MEDICONSULT_LLM_TIMEOUT_MS (cloud tiers are fast, so default stays 60s).
+  const timeoutMs = Number(process.env.MEDICONSULT_LLM_TIMEOUT_MS ?? 60_000);
   let raw: string;
   try {
-    const result = await router.complete(SYSTEM_PROMPT, `Extract all medical data from this document:\n\n${snippet}`, undefined, 60_000);
+    const result = await router.complete(SYSTEM_PROMPT, `Extract all medical data from this document:\n\n${snippet}`, undefined, timeoutMs);
     raw = result.text;
   } catch (e) {
     console.error(`[extractFull] LLM call failed: ${String((e as Error)?.message ?? e)}`);
