@@ -256,7 +256,9 @@ export async function processFile(filePath: string, opts: ProcessOptions = {}): 
 }
 
 export async function processIncomingFolder(): Promise<IngestSummary[]> {
-  const incoming = join(dataDir(), "incoming");
+  // Intake folder: defaults to <dataDir>/incoming, but can point at any folder
+  // (e.g. a user's own reports directory) via MEDICONSULT_INCOMING.
+  const incoming = process.env.MEDICONSULT_INCOMING ?? join(dataDir(), "incoming");
   const results: IngestSummary[] = [];
   let entries: string[] = [];
   try {
