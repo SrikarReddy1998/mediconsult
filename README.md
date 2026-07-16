@@ -77,10 +77,21 @@ reason string) and #5 (`getRecentTimeline` honours the `days` window).
 `verify_against_guideline`, `check_drug_availability_india`, `confirm_review`, `ingest_document`, `ingest_incoming_folder`;
 prompt `specialist_assessment`.
 
+## Prerequisites (Windows, macOS, Linux)
+
+| Need | Where | Notes |
+|---|---|---|
+| **Node.js 20+** (22+ recommended) | [nodejs.org](https://nodejs.org) or `nvm` | 22+ needed for live LLM calls (AI SDK v7) |
+| **Ollama** | [ollama.com/download](https://ollama.com/download) | native installers for macOS, Windows, Linux |
+| ~5 GB free disk | — | for the local models pulled in step 2 |
+
+No C/C++ toolchain is required — `better-sqlite3` and `sqlite-vec` ship prebuilt
+binaries for all three OSes.
+
 ## Setup
 
 ```bash
-# 1. Install deps (better-sqlite3 is native — needs a build toolchain / prebuilt)
+# 1. Install deps (better-sqlite3 ships prebuilt binaries for Windows/macOS/Linux — no compiler needed)
 npm install
 
 # 2. Local Ollama fallback (never rate-limited) + embeddings for RAG
@@ -88,8 +99,9 @@ ollama pull meditron:7b
 ollama pull qwen2.5:7b
 ollama pull nomic-embed-text
 
-# 3. Config
-cp .env.example .env    # optionally add GOOGLE_API_KEY / GROQ_API_KEY / GITHUB_TOKEN
+# 3. Config — copy the template, then edit .env (optional: GOOGLE_API_KEY / GROQ_API_KEY / GITHUB_TOKEN)
+cp .env.example .env                       # macOS / Linux
+# Windows (PowerShell):  Copy-Item .env.example .env
 
 # 4. Create the database + a placeholder patient
 npm run bootstrap
@@ -106,19 +118,11 @@ npm start
 ```
 
 > **Node version:** the DB + safety + MCP spine runs on **Node 20+** (verified on
-> 20.18.1: typecheck clean, 8/8 tests pass). The Vercel AI SDK v7 emits an
-> `EBADENGINE` warning preferring **Node 22+**, so for actual LLM calls
-> (`run_specialist_review`) use Node 22+. `better-sqlite3` is pinned to **11.x** so
-> its prebuilt binary works on Node 20 with no compiler (12.x only ships Node-22+
-> prebuilts).
-
-> **Behind a corporate TLS proxy?** If `npm install` fails with
-> `UNABLE_TO_GET_ISSUER_CERT_LOCALLY`, trust your corporate root CA:
-> 1. `powershell -File scripts\export-ca.ps1` → writes `%USERPROFILE%\corp-ca-bundle.pem`.
-> 2. Create a (gitignored) `.npmrc` with `cafile=C:/Users/<you>/corp-ca-bundle.pem`.
-> 3. For native prebuilt downloads, also expose it to Node:
->    `set NODE_EXTRA_CA_CERTS=%USERPROFILE%\corp-ca-bundle.pem`
->    (WSL: `export NODE_EXTRA_CA_CERTS='C:\Users\<you>\corp-ca-bundle.pem'; export WSLENV=NODE_EXTRA_CA_CERTS/w`).
+> Node 20 and 22, Windows + Linux: typecheck clean, **39/39 tests pass**). The
+> Vercel AI SDK v7 emits an `EBADENGINE` warning preferring **Node 22+**, so for
+> actual LLM calls (`run_specialist_review`) use Node 22+. `better-sqlite3` is
+> pinned to **11.x** so its prebuilt binary works on Node 20 with no compiler
+> (12.x only ships Node-22+ prebuilts).
 
 ## Connect to Claude Desktop
 
@@ -138,6 +142,9 @@ npm start
   }
 }
 ```
+
+Use an **absolute path** for the args and `MEDICONSULT_DATA` (on Windows, either
+forward slashes `C:/Users/you/...` or escaped backslashes `C:\\Users\\you\\...`).
 
 For production, `npm run build` and point the connector at
 `node dist/mcpServer/server.js` instead of `tsx`.
