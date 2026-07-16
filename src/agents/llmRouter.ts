@@ -147,7 +147,7 @@ export class LLMRouter {
   }
 
   /** Raises AllProvidersDownError only if even local Ollama is unreachable. */
-  async complete(system: string, user: string, chain: ChainEntry[] = defaultChain(), timeoutMs = 30_000): Promise<CompleteResult> {
+  async complete(system: string, user: string, chain: ChainEntry[] = defaultChain(), timeoutMs = Number(process.env.MEDICONSULT_LLM_TIMEOUT_MS ?? 30_000)): Promise<CompleteResult> {
     let lastError: unknown = null;
 
     for (let i = 0; i < chain.length; i++) {
