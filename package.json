@@ -1,0 +1,43 @@
+{
+  "name": "mediconsult-ts",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "MediConsult AI — single-patient medical orchestration (TypeScript port). Claude is the front-end via MCP. Core spine: DB + safety scoring + resilient LLM router + local MCP server.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "start": "tsx src/mcpServer/server.ts",
+    "dev": "tsx watch src/mcpServer/server.ts",
+    "bootstrap": "tsx scripts/bootstrap.ts",
+    "start:remote": "tsx src/mcpServer/remoteServer.ts",
+    "start:upload": "tsx src/ingest/uploadApp.ts",
+    "token": "tsx scripts/mintToken.ts",
+    "load:knowledge": "tsx scripts/loadKnowledge.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ai-sdk/google": "^4.0.12",
+    "@ai-sdk/groq": "^4.0.8",
+    "@ai-sdk/openai-compatible": "^3.0.7",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "ai": "^7.0.22",
+    "better-sqlite3": "^11.10.0",
+    "dotenv": "^16.4.5",
+    "mammoth": "^1.12.0",
+    "pdfjs-dist": "^6.1.200",
+    "sqlite-vec": "^0.1.9",
+    "tesseract.js": "^7.0.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}

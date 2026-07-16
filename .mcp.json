@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "ponytail": {
+      "command": "node",
+      "args": ["${PONYTAIL_DIR:-./vendor/ponytail}/ponytail-mcp/index.js"],
+      "env": { "PONYTAIL_DEFAULT_MODE": "full" }
+    },
+    "hermes": {
+      "command": "hermes",
+      "args": ["mcp", "serve"]
+    },
+    "supermemory": {
+      "type": "http",
+      "url": "https://mcp.supermemory.ai/mcp"
+    }
+  }
+}
