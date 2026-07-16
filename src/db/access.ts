@@ -270,12 +270,31 @@ export function getPendingReviews(): Record<string, any>[] {
 }
 
 export function confirmReview(reviewId: number, confirmedValue: string, reviewer: string): void {
-  withDb((db) => {
+  const row = withDb((db) => {
+    const r = db.prepare("SELECT * FROM human_review_queue WHERE id = ?").get(reviewId) as Record<string, any> | undefined;
     db.prepare(
       `UPDATE human_review_queue
        SET confirmed_value = ?, reviewer_id = ?, status = 'reviewed', reviewed_at = datetime('now')
        WHERE id = ?`,
     ).run(confirmedValue, reviewer, reviewId);
+    return r;
+  });
+  if (!row) return;
+  // Promote the human-confirmed value into the timeline at the highest trust tier
+  // so it actually enters the clinical record (buildFullPatientContext reads the
+  // timeline). Without this a "confirmed" value would sit in the queue forever and
+  // never reach the record or the specialist review — the tool's stated contract.
+  const label = String(row.extracted_value ?? "").split("=")[0].trim() || row.review_type || "reviewed value";
+  addTimelineEvent({
+    eventType: "lab_result",
+    eventTimestamp: nowUtc(),
+    localTimestamp: "human-confirmed",
+    sourceType: "human_confirmed",
+    data: { test: label, confirmed_value: confirmedValue, original_extracted: row.extracted_value ?? null },
+    summary: `${label}: ${confirmedValue} (human-confirmed by ${reviewer})`,
+    sourceFile: row.source_file ?? null,
+    confidence: 1.0,
+    confidenceTier: "verified",
   });
 }
 

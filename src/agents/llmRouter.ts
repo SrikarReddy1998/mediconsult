@@ -13,6 +13,7 @@ import { generateText } from "ai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createGroq } from "@ai-sdk/groq";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
+import { createAnthropic } from "@ai-sdk/anthropic";
 
 // Version-proof model type: exactly what generateText accepts.
 type ModelArg = Parameters<typeof generateText>[0]["model"];
@@ -62,7 +63,7 @@ export class ProviderCircuit {
 
 interface ChainEntry {
   id: string;
-  tier: "cloud-free" | "local";
+  tier: "cloud-free" | "cloud" | "local";
   make: () => ModelArg | null; // null = not configured (e.g. no API key) → skip
 }
 
@@ -72,11 +73,37 @@ function localModel(name: string): ModelArg {
   return ollama(name);
 }
 
+/** True when any cloud LLM provider is configured (a key/token is set). */
+function hasCloudProvider(): boolean {
+  return !!(process.env.ANTHROPIC_API_KEY || process.env.GOOGLE_API_KEY || process.env.GROQ_API_KEY || process.env.GITHUB_TOKEN);
+}
+
+/** Claude via @ai-sdk/anthropic — the user-selected model when ANTHROPIC_API_KEY
+ * is set. Default claude-opus-4-8; override with MEDICONSULT_ANTHROPIC_MODEL. */
+function anthropicEntry(): ChainEntry {
+  const model = process.env.MEDICONSULT_ANTHROPIC_MODEL ?? "claude-opus-4-8";
+  return {
+    id: `anthropic/${model}`,
+    tier: "cloud",
+    make: () => (process.env.ANTHROPIC_API_KEY ? createAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY })(model) : null),
+  };
+}
+
+/** Drop the local Ollama floor when a cloud provider is configured, so the
+ * user's chosen cloud model is used instead of slow local 7Bs. Set
+ * MEDICONSULT_ALLOW_OLLAMA=1 to keep Ollama as an offline last resort. */
+function gateOllama(chain: ChainEntry[]): ChainEntry[] {
+  return hasCloudProvider() && !process.env.MEDICONSULT_ALLOW_OLLAMA
+    ? chain.filter((e) => e.tier !== "local")
+    : chain;
+}
+
 /** The fallback chain. Local Ollama is the unbreakable floor. */
 export function defaultChain(): ChainEntry[] {
   const localMedical = process.env.MEDICONSULT_LOCAL_MEDICAL ?? "meditron:7b";
   const localGeneral = process.env.MEDICONSULT_LOCAL_GENERAL ?? "qwen2.5:7b";
-  return [
+  return gateOllama([
+    anthropicEntry(),
     {
       id: "gemini/gemini-2.5-flash",
       tier: "cloud-free",
@@ -97,12 +124,13 @@ export function defaultChain(): ChainEntry[] {
     },
     { id: `ollama/${localMedical}`, tier: "local", make: () => localModel(localMedical) }, // medical floor
     { id: `ollama/${localGeneral}`, tier: "local", make: () => localModel(localGeneral) }, // general floor
-  ];
+  ]);
 }
 
 export function reasoningChain(): ChainEntry[] {
   const localReason = process.env.MEDICONSULT_LOCAL_REASON ?? "qwen2.5:7b";
-  return [
+  return gateOllama([
+    anthropicEntry(),
     {
       id: "groq/llama-3.3-70b-versatile",
       tier: "cloud-free",
@@ -114,7 +142,7 @@ export function reasoningChain(): ChainEntry[] {
       make: () => (process.env.GOOGLE_API_KEY ? createGoogleGenerativeAI({ apiKey: process.env.GOOGLE_API_KEY })("gemini-2.5-pro") : null),
     },
     { id: `ollama/${localReason}`, tier: "local", make: () => localModel(localReason) },
-  ];
+  ]);
 }
 
 export class AllProvidersDownError extends Error {}
@@ -147,7 +175,7 @@ export class LLMRouter {
   }
 
   /** Raises AllProvidersDownError only if even local Ollama is unreachable. */
-  async complete(system: string, user: string, chain: ChainEntry[] = defaultChain(), timeoutMs = 30_000): Promise<CompleteResult> {
+  async complete(system: string, user: string, chain: ChainEntry[] = defaultChain(), timeoutMs = Number(process.env.MEDICONSULT_LLM_TIMEOUT_MS ?? 30_000)): Promise<CompleteResult> {
     let lastError: unknown = null;
 
     for (let i = 0; i < chain.length; i++) {
