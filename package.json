@@ -13,6 +13,7 @@
     "start": "tsx src/mcpServer/server.ts",
     "dev": "tsx watch src/mcpServer/server.ts",
     "bootstrap": "tsx scripts/bootstrap.ts",
+    "setup:patient": "tsx scripts/setupPatient.ts",
     "start:remote": "tsx src/mcpServer/remoteServer.ts",
     "start:upload": "tsx src/ingest/uploadApp.ts",
     "token": "tsx scripts/mintToken.ts",
