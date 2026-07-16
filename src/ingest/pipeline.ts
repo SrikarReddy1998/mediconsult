@@ -1,8 +1,9 @@
 /**
  * MediConsult AI (TS) — ingestion pipeline orchestrator.
  *
- * hash+dedupe → text extraction (OCR/PDF/docx/text) → LLM extraction → regex
- * lab extraction → per-patient confidence → route (timeline vs review) → alerts.
+ * hash+dedupe → text extraction (OCR/PDF/docx/text) → LLM extraction (primary;
+ * regex lab extraction is a fallback only when the LLM is unavailable) →
+ * per-patient confidence → route (timeline vs review) → alerts.
  *
  * "Never silently fail": every value either lands as verified or in the review
  * queue with its source. Carries Python fixes #2 (out-of-bounds → review),
@@ -160,8 +161,14 @@ export async function processFile(filePath: string, opts: ProcessOptions = {}): 
   const llm = await llmExtract(text);
   const reportTs = reportTimestamp(llm, sidecar);
 
-  const values = extractLabValues(text);
-  if (!values.length) {
+  // Prefer the LLM extractor whenever it produced anything usable; the regex
+  // extractor is only a FALLBACK for when the LLM is unavailable. On narrative
+  // reports regex grabs numbers from headers/addresses/IDs (e.g. a street
+  // number in "…& 17, Street No. 19" misread as "calcium 17"), so it must not
+  // run alongside a good LLM pass and pollute the record with false criticals.
+  const llmOk = llm.document_type !== "unknown" || llm.medications.length > 0 || llm.diagnoses.length > 0 || llm.lab_results.length > 0;
+  const values = llmOk ? [] : extractLabValues(text);
+  if (!values.length && llm.lab_results.length === 0) {
     const eid = db.addTimelineEvent({ eventType: "clinical_note", eventTimestamp: reportTs, localTimestamp: sidecar.captured_at_client ?? "unknown", sourceType: "ocr_document", data: { raw_text: text.slice(0, 5000) }, summary: "Document ingested; no structured labs auto-detected", sourceFile: path, confidence: ocrConf, confidenceTier: "provisional" });
     const rid = db.addToReviewQueue({ reviewType: "no_labs_detected", sourceFile: path, eventId: eid, context: "Document text captured but no lab values auto-detected. Review to extract any values manually." });
     storeMedsAndDiagnoses(llm, summary);
