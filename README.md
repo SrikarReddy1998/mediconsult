@@ -124,7 +124,11 @@ npm start
 > pinned to **11.x** so its prebuilt binary works on Node 20 with no compiler
 > (12.x only ships Node-22+ prebuilts).
 
-## Connect to Claude Desktop
+## Connect a front-end — Claude Desktop or ChatGPT
+
+MediConsult has no GUI of its own: **your LLM client is the front-end, via MCP.** Use whichever you have — Claude Desktop or ChatGPT.
+
+### Claude Desktop (local, simplest)
 
 `claude_desktop_config.json`:
 
@@ -136,7 +140,8 @@ npm start
       "args": ["tsx", "/ABSOLUTE/PATH/mediconsult-ts/src/mcpServer/server.ts"],
       "env": {
         "MEDICONSULT_DATA": "/ABSOLUTE/PATH/patient_data",
-        "GROQ_API_KEY": "your_key"
+        "ANTHROPIC_API_KEY": "sk-ant-...",
+        "NODE_EXTRA_CA_CERTS": "/ABSOLUTE/PATH/corp-ca-bundle.pem"
       }
     }
   }
@@ -147,7 +152,16 @@ Use an **absolute path** for the args and `MEDICONSULT_DATA` (on Windows, either
 forward slashes `C:/Users/you/...` or escaped backslashes `C:\\Users\\you\\...`).
 
 For production, `npm run build` and point the connector at
-`node dist/mcpServer/server.js` instead of `tsx`.
+`node dist/mcpServer/server.js` instead of `tsx`. (`NODE_EXTRA_CA_CERTS` is only
+needed behind a corporate TLS proxy — omit it otherwise.)
+
+### ChatGPT (via MCP connector)
+
+ChatGPT (Plus / Pro / Business / Enterprise, Developer Mode) can use MediConsult as a **custom connector**. ChatGPT runs in the cloud, so it needs the **remote** server reachable over **HTTPS**: run `npm run start:remote` (below) and expose `:8765/mcp` through a tunnel (Tailscale / Cloudflare Tunnel), then add that HTTPS URL + a bearer token (`npm run token owner`) as a connector in ChatGPT ▸ Settings ▸ Connectors. (Claude Desktop can use the local stdio server directly; ChatGPT cannot reach `localhost`.)
+
+### Which model does the *reasoning*?
+
+The client you chat in (Claude or ChatGPT) is the front-end. MediConsult's **own** calls — report extraction and specialist review — use the provider you key in `.env`: set **`ANTHROPIC_API_KEY`** for Claude (default `claude-opus-4-8`; override with `MEDICONSULT_ANTHROPIC_MODEL`) or **`GITHUB_TOKEN`** for GPT-4o. **When any cloud key is set, the local Ollama models are disabled automatically** (set `MEDICONSULT_ALLOW_OLLAMA=1` to keep them as an offline fallback). Note: a Claude Pro / ChatGPT subscription powers the chat client only — the server's API calls need their own key.
 
 ## Remote server (network access)
 
